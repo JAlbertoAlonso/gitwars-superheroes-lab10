@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import os
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
@@ -12,7 +13,8 @@ def load_data():
     """
     Carga el dataset de superhéroes y prepara X, y para entrenamiento.
     """
-    df = pd.read_csv('../data/data.csv')
+    BASE_FILE_THIS_SCRIPT = os.path.dirname(os.path.abspath(__file__))
+    df = pd.read_csv(os.path.join(BASE_FILE_THIS_SCRIPT, '../data/data.csv'))
     
     # Features: todas las columnas excepto 'power' (variable objetivo)
     X = df.drop('power', axis=1).values

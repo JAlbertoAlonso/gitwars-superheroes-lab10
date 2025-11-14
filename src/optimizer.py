@@ -140,7 +140,7 @@ def acquisition_ucb(mu, sigma, kappa=2.0):
 # -----------------------------------------------------------
 # BO principal
 # -----------------------------------------------------------
-def optimize_model(model_name, n_init=3, n_iter=10):
+def optimize_model(model_name, n_init=3, n_iter=10, return_history=False):
     """
     Optimiza hiperparámetros usando Optimización Bayesiana.
     
@@ -148,10 +148,12 @@ def optimize_model(model_name, n_init=3, n_iter=10):
         model_name: Nombre del modelo ('svm', 'rf', 'mlp')
         n_init: Número de puntos iniciales aleatorios
         n_iter: Número de iteraciones de BO
+        return_history: Si True, retorna también el historial completo
     
     Returns:
         best_params: Mejor configuración encontrada
         best_metric: Mejor métrica (float) alcanzada
+        history (opcional): Lista de (params, metric) si return_history=True
     """
     # Definir dominios discretos según el modelo
     if model_name == 'svm':
@@ -223,6 +225,7 @@ def optimize_model(model_name, n_init=3, n_iter=10):
     X_observed = []
     y_observed = []
     params_history = []
+    iteration_history = []  # Para tracking de evolución
     
     print(f"\n=== Optimizando {model_name.upper()} con BO ===")
     print(f"Espacio de búsqueda: {n_total} combinaciones")
@@ -242,6 +245,13 @@ def optimize_model(model_name, n_init=3, n_iter=10):
         X_observed.append(x_vec)
         y_observed.append(metric)
         params_history.append(params_dict)
+        iteration_history.append({
+            'iteration': len(X_observed),
+            'params': params_dict.copy(),
+            'metric': metric,
+            'best_so_far': max(y_observed),
+            'phase': 'initialization'
+        })
         
         print(f"Punto {len(X_observed)}: {params_dict} -> Métrica: {metric:.4f}")
     
@@ -292,6 +302,16 @@ def optimize_model(model_name, n_init=3, n_iter=10):
         X_observed = np.vstack([X_observed, next_x_vec])
         y_observed = np.append(y_observed, next_metric)
         params_history.append(next_params_dict)
+        iteration_history.append({
+            'iteration': len(X_observed),
+            'params': next_params_dict.copy(),
+            'metric': next_metric,
+            'best_so_far': max(y_observed),
+            'phase': 'bayesian_optimization',
+            'ucb': float(ucb_values[best_ucb_idx]),
+            'mu': float(mu[best_ucb_idx]),
+            'sigma': float(sigma[best_ucb_idx])
+        })
         
         print(f"Iteración {iteration + 1}: {next_params_dict}")
         print(f"  -> Métrica: {next_metric:.4f} (UCB: {ucb_values[best_ucb_idx]:.4f})")
@@ -305,7 +325,10 @@ def optimize_model(model_name, n_init=3, n_iter=10):
     print(f"Parámetros: {best_params}")
     print(f"Métrica: {best_metric:.4f}")
     
-    return best_params, best_metric
+    if return_history:
+        return best_params, best_metric, iteration_history
+    else:
+        return best_params, best_metric
 
 
 # Función auxiliar para pruebas
