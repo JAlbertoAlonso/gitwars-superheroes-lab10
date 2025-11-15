@@ -2,175 +2,196 @@
 import requests
 import pandas as pd
 import numpy as np
+import json
 import os
-from pathlib import Path
 
-def convert_height_to_cm(height_str):
-    """Convierte altura a cm manejando diferentes formatos"""
-    if not height_str or height_str == "-" or height_str == "null":
-        return None
+def convert_to_cm(height_list):
+    """
+    Convierte la altura a centímetros.
+    La altura viene como lista: ["6'8", "203 cm"] o ["-"]
+    """
+    if not height_list or height_list == ["-"]:
+        return np.nan
     
-    # Limpiar string
-    height_str = str(height_str).strip()
+    # Tomar el primer elemento que no sea "-"
+    for height_str in height_list:
+        if height_str != "-":
+            height_str = str(height_str).strip()
+            
+            # Si ya está en cm
+            if "cm" in height_str.lower():
+                try:
+                    return float(height_str.lower().replace("cm", "").strip())
+                except:
+                    continue
+            
+            # Si está en pies y pulgadas (formato: "6'8"")
+            if "'" in height_str:
+                try:
+                    # Formato: "6'8""
+                    parts = height_str.split("'")
+                    feet = float(parts[0])
+                    inches_str = parts[1].replace('"', '').strip()
+                    inches = float(inches_str) if inches_str else 0
+                    return (feet * 30.48) + (inches * 2.54)
+                except:
+                    continue
+            
+            # Intentar convertir directamente
+            try:
+                return float(height_str)
+            except:
+                continue
     
-    # Si ya está en cm
-    if "cm" in height_str:
-        try:
-            return float(height_str.replace("cm", "").replace(" ", ""))
-        except:
-            return None
-    
-    # Si está en pies y pulgadas (formato: "6'8"")
-    if "'" in height_str:
-        try:
-            parts = height_str.split("'")
-            feet = float(parts[0])
-            inches = float(parts[1].replace('"', '').strip()) if len(parts) > 1 else 0
-            return round((feet * 30.48) + (inches * 2.54), 2)
-        except:
-            return None
-    
-    # Intentar convertir directamente
-    try:
-        return float(height_str)
-    except:
-        return None
+    return np.nan
 
-def convert_weight_to_kg(weight_str):
-    """Convierte peso a kg manejando diferentes formatos"""
-    if not weight_str or weight_str == "-" or weight_str == "null":
-        return None
+def convert_to_kg(weight_list):
+    """
+    Convierte el peso a kilogramos.
+    El peso viene como lista: ["980 lb", "443 kg"] o ["-"]
+    """
+    if not weight_list or weight_list == ["-"]:
+        return np.nan
     
-    # Limpiar string
-    weight_str = str(weight_str).strip()
+    # Tomar el primer elemento que no sea "-"
+    for weight_str in weight_list:
+        if weight_str != "-":
+            weight_str = str(weight_str).strip()
+            
+            # Si ya está en kg
+            if "kg" in weight_str.lower():
+                try:
+                    return float(weight_str.lower().replace("kg", "").strip())
+                except:
+                    continue
+            
+            # Si está en libras
+            if "lb" in weight_str.lower():
+                try:
+                    lbs = float(weight_str.lower().replace("lb", "").strip())
+                    return lbs * 0.453592
+                except:
+                    continue
+            
+            # Intentar convertir directamente
+            try:
+                return float(weight_str)
+            except:
+                continue
     
-    # Si ya está en kg
-    if "kg" in weight_str:
-        try:
-            return float(weight_str.replace("kg", "").replace(" ", ""))
-        except:
-            return None
-    
-    # Si está en libras
-    if "lb" in weight_str:
-        try:
-            lbs = float(weight_str.replace("lb", "").replace(" ", ""))
-            return round(lbs * 0.453592, 2)
-        except:
-            return None
-    
-    # Intentar convertir directamente
-    try:
-        return float(weight_str)
-    except:
-        return None
-
-def safe_int(value):
-    """Convierte seguro a int manejando null/string"""
-    if value is None or value == "null":
-        return 0
-    try:
-        return int(float(value))
-    except:
-        return 0
+    return np.nan
 
 def fetch_superhero_data():
     """
     Consume la SuperHero API, procesa las variables requeridas
     y genera data/data.csv con el dataset final.
     """
-    print("🚀 Iniciando Elemento 0 - Consumo de SuperHero API")
+    print("Consumiendo SuperHero API...")
     
-    # Crear directorios si no existen
-    Path("data").mkdir(exist_ok=True)
-    Path("src/Elemento0").mkdir(parents=True, exist_ok=True)
-    
-    api_url = "https://akabab.github.io/superhero-api/api/all.json"
+    # URL de la API
+    url = "https://akabab.github.io/superhero-api/api/all.json"
     
     try:
-        print("📡 Conectando a la API...")
-        response = requests.get(api_url, timeout=30)
+        # Hacer la petición a la API
+        response = requests.get(url)
         response.raise_for_status()
         
-        superheroes = response.json()
-        print(f"✅ Se obtuvieron {len(superheroes)} superhéroes")
+        data = response.json()
+        print(f"Se obtuvieron {len(data)} superhéroes de la API")
         
-        processed_data = []
-        
-        for hero in superheroes:
-            try:
-                # Powerstats (variables predictoras)
-                powerstats = hero.get('powerstats', {})
-                intelligence = safe_int(powerstats.get('intelligence'))
-                strength = safe_int(powerstats.get('strength'))
-                speed = safe_int(powerstats.get('speed'))
-                durability = safe_int(powerstats.get('durability'))
-                combat = safe_int(powerstats.get('combat'))
-                
-                # Appearance (convertir unidades)
-                appearance = hero.get('appearance', {})
-                height_str = appearance.get('height', ['-'])[0]
-                weight_str = appearance.get('weight', ['-'])[0]
-                
-                height_cm = convert_height_to_cm(height_str)
-                weight_kg = convert_weight_to_kg(weight_str)
-                
-                # Power (variable objetivo)
-                power = safe_int(hero.get('power'))
-                
-                # Solo incluir si todos los valores están presentes
-                if all(v is not None for v in [intelligence, strength, speed, 
-                                             durability, combat, height_cm, 
-                                             weight_kg, power]):
-                    processed_data.append({
-                        'intelligence': intelligence,
-                        'strength': strength,
-                        'speed': speed,
-                        'durability': durability,
-                        'combat': combat,
-                        'height_cm': height_cm,
-                        'weight_kg': weight_kg,
-                        'power': power
-                    })
+    except requests.exceptions.RequestException as e:
+        print(f"Error al consumir la API: {e}")
+        return
+    
+    processed_data = []
+    
+    for hero in data:
+        try:
+            powerstats = hero.get('powerstats', {})
+            appearance = hero.get('appearance', {})
+            
+            # Obtener height y weight como listas (formato original de la API)
+            height_list = appearance.get('height', ["-"])
+            weight_list = appearance.get('weight', ["-"])
+            
+            # Convertir unidades
+            height_cm = convert_to_cm(height_list)
+            weight_kg = convert_to_kg(weight_list)
+            
+            hero_data = {
+                'intelligence': powerstats.get('intelligence', np.nan),
+                'strength': powerstats.get('strength', np.nan),
+                'speed': powerstats.get('speed', np.nan),
+                'durability': powerstats.get('durability', np.nan),
+                'combat': powerstats.get('combat', np.nan),
+                'height_cm': height_cm,
+                'weight_kg': weight_kg,
+                'power': powerstats.get('power', np.nan)
+            }
+            
+            processed_data.append(hero_data)
                     
-            except Exception as e:
-                continue  # Silenciosamente omitir héroes con errores
+        except Exception as e:
+            print(f"Error procesando héroe {hero.get('name', 'Unknown')}: {e}")
+            continue
+    
+    print(f"Se procesaron {len(processed_data)} héroes")
+    
+    df = pd.DataFrame(processed_data)
+    print(f"Dataset final con {len(df)} registros")
+    
+    # Calcular medias para reemplazar NaN
+    height_mean = df['height_cm'].mean()
+    weight_mean = df['weight_kg'].mean()
+    
+    print(f"\nMedias calculadas:")
+    print(f"Altura media: {height_mean:.2f} cm")
+    print(f"Peso medio: {weight_mean:.2f} kg")
+    
+    # Reemplazar NaN con las medias
+    df['height_cm'].fillna(height_mean, inplace=True)
+    df['weight_kg'].fillna(weight_mean, inplace=True)
+    
+    # Crear directorio data si no existe
+    os.makedirs('data', exist_ok=True)
+    
+    # Guardar el dataset
+    output_path = 'data/data.csv'
+    df.to_csv(output_path, index=False)
+    print(f"Dataset guardado en: {output_path}")
+    
+    # Mostrar información del dataset
+    print("\nInformación del dataset:")
+    print(f"Columnas: {list(df.columns)}")
+    print(f"Forma: {df.shape}")
+    
+    # Mostrar valores nulos por columna (deberían ser 0 ahora)
+    print("\nValores nulos por columna (después de reemplazar con media):")
+    null_counts = df.isnull().sum()
+    for col, null_count in null_counts.items():
+        print(f"  {col}: {null_count} nulos")
+    
+    print(f"Total de valores nulos: {df.isnull().sum().sum()}")
+    
+    print("\nPrimeras 10 filas:")
+    print(df.head(10))
+    
+    print("\nEstadísticas descriptivas:")
+    print(df.describe())
+    
+    # Mostrar algunos ejemplos de conversión
+    print("\nEjemplos de conversión:")
+    sample_heroes = data[:5]
+    for i, hero in enumerate(sample_heroes):
+        name = hero.get('name', 'Unknown')
+        height_orig = hero.get('appearance', {}).get('height', ['-'])
+        weight_orig = hero.get('appearance', {}).get('weight', ['-'])
+        height_cm = df.iloc[i]['height_cm']
+        weight_kg = df.iloc[i]['weight_kg']
         
-        print(f"📊 Registros válidos procesados: {len(processed_data)}")
-        
-        # Crear DataFrame y asegurar 600 registros
-        df = pd.DataFrame(processed_data)
-        
-        # Si tenemos menos de 600, duplicar aleatoriamente hasta completar
-        if len(df) < 600:
-            needed = 600 - len(df)
-            additional = df.sample(needed, replace=True)
-            df = pd.concat([df, additional], ignore_index=True)
-            print(f"🔄 Se agregaron {needed} registros duplicados para completar 600")
-        
-        # Tomar exactamente 600 registros
-        df = df.head(600)
-        
-        # Asegurar que todas son numéricas
-        df = df.apply(pd.to_numeric, errors='coerce')
-        df = df.dropna()
-        
-        # Guardar dataset
-        output_path = "data/data.csv"
-        df.to_csv(output_path, index=False)
-        
-        # Verificación final
-        print(f"\n✅ DATASET GENERADO EXITOSAMENTE")
-        print(f"📁 Ubicación: {output_path}")
-        print(f"📐 Dimensiones: {df.shape}")
-        print(f"📋 Columnas: {list(df.columns)}")
-        print(f"🔍 Valores nulos: {df.isnull().sum().sum()}")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        return False
+        print(f"{name}:")
+        print(f"  Altura original: {height_orig} -> {height_cm:.2f} cm")
+        print(f"  Peso original: {weight_orig} -> {weight_kg:.2f} kg")
 
 if __name__ == "__main__":
     fetch_superhero_data()
